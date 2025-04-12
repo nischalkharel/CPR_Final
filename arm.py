@@ -5,6 +5,7 @@ import board
 import busio
 from adafruit_pca9685 import PCA9685
 from adafruit_motor import servo
+from pathlib import Path
 
 # Initialize I2C bus and PCA9685 at I2C address 0x40
 i2c = busio.I2C(board.SCL, board.SDA)
@@ -77,9 +78,11 @@ def execute_positions(position_file):
         print(f"Error: Invalid JSON format in {position_file}.")
 
 def pick_place_from_to(action, square):
-	file_to_pull = f"{action}_{square}.json"
+	file_to_pull = f"{Path(__file__).resolve().parent}/move_data/{action}_{square}.json"
 	execute_positions(file_to_pull)
 
 def open_gripper():
 	gripper_servo.angle =  OPEN_POS
+
+pick_place_from_to("pickup","d2") 
 

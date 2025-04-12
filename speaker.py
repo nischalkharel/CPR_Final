@@ -20,12 +20,6 @@ def _play(path: Path) -> None:
 
 # -- 4.  Public helper ----------------------------------------------
 def play_sound(name: str, block: bool = False) -> None:
-    """
-    Play AUDIO_ROOT/<name>.mp3 on the USB speaker.
-
-        play_sound("BlackTurn")          # non‑blocking
-        play_sound("illegal_move", True) # block until done
-    """
     path = AUDIO_ROOT / f"{name}.mp3"
     if not path.exists():
         raise FileNotFoundError(path)

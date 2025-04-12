@@ -187,7 +187,7 @@ def handle_human_turn():
             
             play_sound("pressWhite_Black", block=False)
             button_pressed = wait_buttons()
-            if((validate_move_input(pre_board_for_validation, from_position, to_position))):
+            if(not(validate_move_input(pre_board_for_validation, from_position, to_position))):
                 #SPEAKER SAYING THE MOVE IS NOT VALID AND move_logic.py will speak
                 button_pressed2 = wait_buttons()
                 continue

@@ -21,7 +21,7 @@ def validate_move_input(pre_turn_board, from_move, to_move):
 
 def validate_move(old_chessboard, move):
     
-    piece = move["piece"]
+    piece = move["piece"][6:]
     from_square = move["from"]
     to_square = move["to"]
     captured = move.get("captured")
@@ -50,21 +50,22 @@ def validate_move(old_chessboard, move):
 def validate_pawn_move(old_chessboard, move):
     from_file, from_rank = move["from"][0], int(move["from"][1])
     to_file, to_rank = move["to"][0], int(move["to"][1])
-    direction = 1 if "white" in move["piece"] else -1
-    start_rank = 2 if "white" in move["piece"] else 7
-
+    direction = 1 if "white" in move["piece"][:5] else -1
+    start_rank = 7 if "white" in move["piece"][:5] else 2
+    
     # Forward move
     if from_file == to_file:
+        print("same column")
         if to_rank - from_rank == direction and old_chessboard[move["to"]] == "empty":
             return True, "Valid pawn move."
         # Double move from starting position
-        if from_rank == start_rank and to_rank - from_rank == 2 * direction:
-            intermediate_square = f"{from_file}{from_rank + direction}"
+        if from_rank == start_rank and from_rank - to_rank == 2 * direction:
+            intermediate_square = f"{from_file}{from_rank - direction}"
             if old_chessboard[intermediate_square] == "empty" and old_chessboard[move["to"]] == "empty":
                 return True, "Valid double pawn move."
 
     # Capturing move
-    if abs(ord(to_file) - ord(from_file)) == 1 and to_rank - from_rank == direction:
+    if abs(ord(to_file) - ord(from_file)) == 1 and from_rank - to_rank == direction:
         if old_chessboard[move["to"]] != "empty":
             return True, "Valid pawn capture."
     oled.display("Invalid","Pawn Move")
