@@ -22,7 +22,7 @@ class AIChess:
     def close_engine(self):
         self.engine.quit()
         
-    def get_ai_move(self, difficulty = "medium") -> list[str]:
+    def get_ai_move(self, difficulty = "easy") -> list[str]:
         oled = ChessOLED()
         """Return [from_sq, to_sq] and transparently restart Stockfish if it crashed."""
         # --- choose a time limit from the difficulty string ------------------------

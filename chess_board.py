@@ -27,7 +27,7 @@ lgpio.gpio_claim_input(h, BLACK_BUTTON_PIN, lgpio.SET_PULL_UP)
 
 oled = ChessOLED()
 
-def wait_buttons(position_to_check = "", turn = 0):
+def wait_buttons(position_to_check = "", turn = 0, hold = False):
     prev_state = ""
     while True:
         white_state = lgpio.gpio_read(h, WHITE_BUTTON_PIN)
@@ -55,11 +55,33 @@ def wait_buttons(position_to_check = "", turn = 0):
             if(line1 == "") and line2 == "":
                 oled.display("Your Turn","Make a move")
         if white_state == 0:  # Pressed (Active Low)
+            if(hold == True):
+                if black_state == 0:  # Pressed (Active Low)
+                    while(black_state == 0):
+                        black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
+                        time.sleep(.03)
+                    while(black_state == 0):
+                        black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
+                        time.sleep(.03)
+                    return "both pressed"
+                else:
+                    continue
             while(white_state == 0):
                 white_state = lgpio.gpio_read(h, WHITE_BUTTON_PIN)
                 time.sleep(.03)
             return "white_button_pressed"
         if black_state == 0:  # Pressed (Active Low)
+            if(hold == True):
+                if white_state == 0:  # Pressed (Active Low)
+                    while(white_state == 0):
+                        black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
+                        time.sleep(.03)
+                    while(black_state == 0):
+                        black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
+                        time.sleep(.03)
+                    return "both pressed"
+                else:
+                    continue
             while(black_state == 0):
                 black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
                 time.sleep(.03)
@@ -67,12 +89,6 @@ def wait_buttons(position_to_check = "", turn = 0):
         
         time.sleep(0.05)  # Debounce delay
 
-
-def press_white():
-    print("\npress white button to confirm\n")
-
-def press_black():
-    print("\npress Black button to deny and move again\n")
 
 def check_initial_setup():
     # Expected initial setup for a chessboard
@@ -130,6 +146,7 @@ def handle_human_turn():
     with open("pre_turn_board.json", "r") as file:
         board_state = json.load(file)
 
+    manage_game_details("white",difficulty, read = 0)
     pre_board_for_validation = board_state
 
     oled.display("Your Turn","Make a move")
@@ -139,7 +156,6 @@ def handle_human_turn():
     while True:
         oled.display("Your Turn","Make a move")
         play_sound("press_afterMove", block=True)
-        press_white()
         time.sleep(1)
         button_pressed = wait_buttons(turn = 1)
         if(button_pressed == "black_button_pressed"):
@@ -225,14 +241,16 @@ def handle_human_turn():
         
         return
 
-def handle_bot_turn():
+def handle_bot_turn(difficulty = "easy"):
     shutil.copy("chessboard.json", "pre_turn_board.json")
     with open("pre_turn_board.json", "r") as file:
         board_state = json.load(file)
-    oled.display("Arm's", "Turn")
-    play_sound("BlackTurn", block=False)
     
-    ai_move = get_ai_move()
+    oled.display("Arm's", "Turn")
+    play_sound("BlackTurn", block=True)
+    manage_game_details("black",difficulty, read = 0)
+
+    ai_move = get_ai_move(difficulty)
     ai_move[0] = engine_to_physical(ai_move[0])
     ai_move[1] = engine_to_physical(ai_move[1])
     print(f"{ai_move[0]}")
@@ -312,7 +330,7 @@ def handle_bot_turn():
     play_sound("black_done", block=True)
     go_rest()
   
-def get_ai_move():
+def get_ai_move(difficulty = "easy"):
     # Load the chess board
     with open("chessboard.json", "r") as file:
         board_state = json.load(file)
@@ -324,8 +342,8 @@ def get_ai_move():
     ai.set_position(fen_string)
     
     # Get the next move
-    next_move = ai.get_ai_move()
-    print(f"AI recommends move: {next_move[0]}{next_move[1]}")
+    next_move = ai.get_ai_move(difficulty)
+    print(f"{difficulty} AI recommends move: {next_move[0]}{next_move[1]}")
     ai.close_engine()
     return next_move
 
@@ -420,28 +438,130 @@ def rotate_board(board_dict: dict) -> dict:
 def engine_to_physical(pos):
     return f"{pos[0]}{9-int(pos[1])}"
 
+def manage_game_details(turn = "black", difficulty = "easy", read=0):
+    filename = "previous_game_details"
+    
+    if read == 1:
+        if os.path.exists(filename):
+            with open(filename, "r") as file:
+                try:
+                    details = json.load(file)
+                    return [details.get("Turn", ""), details.get("Difficulty", "")]
+                except json.JSONDecodeError:
+                    return ["none", "none"]
+        else:
+            return []
+    else:
+        details = {"Turn": turn, "Difficulty": difficulty}
+        with open(filename, "w") as file:
+            json.dump(details, file)
+
 def piece(piece):
     play_sound(f"{piece[:6]}", block=True)
     play_sound(f"{piece[6:]}", block = True)
+
 if __name__ == "__main__":
     go_rest()
-    oled.display("Initial Checks", "Starting")
-    play_sound("initial_checks", block=True)
-    if is_checkmate_or_stalemate(json.load(open("chessboard.json")), "w"):
-        print("")
-    if check_initial_setup():
-        print("Initial checks are completed correctly.")
-        oled.display("Checks Completed", "Starting the Game")
-        play_sound("initial_checks_over", block=True)
-        while True:
-            print("\nWhite's turn.")
-            handle_human_turn()
-            if is_checkmate_or_stalemate(json.load(open("chessboard.json")), "b"):
-                break
+    play_sound("hold_both_buttons_to_start", bool = True)
+    hold = wait_buttons(hold = True)
 
-            print("\nBlack's turn.")
-            handle_bot_turn()
-            if is_checkmate_or_stalemate(json.load(open("chessboard.json")), "w"):
-                break
-    else:
-        print("Initial check failed.")
+    difficulty = ""
+    resume_game = 0
+    play_sound("choose_difficulty", block=True)
+    
+    while(1):
+        pressed = wait_buttons()
+        if(pressed == "black_button_pressed"):
+            match difficulty:
+                case "easy":
+                    difficulty = "medium"
+                    play_sound("medium_mode", block = True)
+                case "medium":
+                    difficulty = "hard"
+                    play_sound("hard_mode", block = True)
+                case "hard":
+                    difficulty = "resume_previous_match"
+                    play_sound("resume_previous_match", block = True)
+                case _:
+                    difficulty = "easy"
+                    play_sound("easy_mode", block = True)
+        else:
+            if(difficulty == "resume_previous_match"):
+                play_sound("lets_start_from_where_we_left_off", block=True)
+                play_sound("place_pieces.mp3", block = True)
+                game_details = manage_game_details(read = 1)
+                if(game_details[0] == "none"):
+                    oled.display("no previous","game saved")
+                with open("pre_turn_board.json", "r") as file:
+                    board_state = json.load(file)
+    
+                for position, expected_piece in board_state.items():
+                    if expected_piece != "empty":
+                        oled.display(f"{expected_piece} in", f"{position}")
+                        pressed = wait_buttons()
+                        if(setup_checker.check(position) == "empty"):
+                            press_again = wait_buttons(position_to_check=position)
+                everything_good = 0
+                while(not(everything_good)):
+                    everything_good = 1
+                    for position, expected_piece in board_state.items():
+                        if expected_piece == "empty" and setup_checker.check(position) != "empty":
+                            everything_good = 0
+                            oled.display(f"{position} should", "be empty")
+                            pressed = wait_buttons()
+                            if(setup_checker.check(position) != "empty"):
+                                press_again = wait_buttons(position_to_check=position)
+                        elif expected_piece != "empty" and setup_checker == "empty":
+                            everything_good = 0
+                            oled.display(f"{expected_piece}", f"{position}")
+                            pressed = wait_buttons()
+                            if(setup_checker.check(position) == "empty"):
+                                press_again = wait_buttons(position_to_check=position)
+                oled.display("Checks Completed", "Starting the Game")
+                play_sound("initial_checks_over", block=True)
+                if(game_details[0] == "black"):
+                    print("\nBlack's turn.")
+                    handle_bot_turn(game_details[1])
+                    if is_checkmate_or_stalemate(json.load(open("chessboard.json")), "w"):
+                         break
+                else:
+                    print("\nWhite's turn.")
+                    handle_human_turn()
+                    if is_checkmate_or_stalemate(json.load(open("chessboard.json")), "b"):
+                        break
+                    print("\nBlack's turn.")
+                    handle_bot_turn(game_details[1])
+                    if is_checkmate_or_stalemate(json.load(open("chessboard.json")), "w"):
+                        break     
+                while True:
+                    print("\nWhite's turn.")
+                    handle_human_turn()
+                    if is_checkmate_or_stalemate(json.load(open("chessboard.json")), "b"):
+                         break
+                    print("\nBlack's turn.")
+                    handle_bot_turn(game_details[1])
+                    if is_checkmate_or_stalemate(json.load(open("chessboard.json")), "w"):
+                         break
+
+            else:
+                oled.display("Initial Checks", "Starting")
+                play_sound("initial_checks", block=True)
+                if check_initial_setup():
+                    print("Initial checks are completed correctly.")
+                    oled.display("Checks Completed", "Starting the Game")
+                    play_sound("initial_checks_over", block=True)
+                    while True:
+                        print("\nWhite's turn.")
+                        handle_human_turn()
+                        if is_checkmate_or_stalemate(json.load(open("chessboard.json")), "b"):
+                            break
+                        print("\nBlack's turn.")
+                        handle_bot_turn(difficulty)
+                        if is_checkmate_or_stalemate(json.load(open("chessboard.json")), "w"):
+                            break
+                else:
+                    print("Initial check failed.")
+
+
+
+    
