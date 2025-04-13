@@ -81,8 +81,11 @@ def pick_place_from_to(action, square):
 	file_to_pull = f"{Path(__file__).resolve().parent}/move_data/{action}_{square}.json"
 	execute_positions(file_to_pull)
 
+def go_rest():
+    file_to_pull = f"{Path(__file__).resolve().parent}/move_data/get_back.json"
+    execute_positions(file_to_pull)
+
 def open_gripper():
 	gripper_servo.angle =  OPEN_POS
 
-pick_place_from_to("pickup","d2") 
 

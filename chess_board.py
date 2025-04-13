@@ -7,7 +7,7 @@ import os
 import lgpio
 import time
 import shutil
-from arm import pick_place_from_to, open_gripper
+from arm import pick_place_from_to, open_gripper, go_rest
 from speaker import play_sound
 from display import ChessOLED 
 from move_logic import validate_move_input
@@ -48,6 +48,8 @@ def wait_buttons(position_to_check = "", turn = 0):
                     line1 = f"{position}: empty"
                 else:
                     line2 = f"{position}: piece"
+                
+                counter = counter+1
                 oled.display(line1, line2)    
             
             if(line1 == "") and line2 == "":
@@ -132,7 +134,7 @@ def handle_human_turn():
 
     oled.display("Your Turn","Make a move")
     play_sound("WhiteTurn", block=True)
-    
+    captured = 0
     # Continuously check for changes in progress board
     while True:
         oled.display("Your Turn","Make a move")
@@ -167,6 +169,7 @@ def handle_human_turn():
             # Save the updated state back to the file
             with open("pre_turn_board.json", 'w') as file:
                 json.dump(board_state, file, indent=4)
+            captured = 1
             continue
         elif len(changed_squares) == 2:
             
@@ -187,10 +190,9 @@ def handle_human_turn():
             
             play_sound("pressWhite_Black", block=False)
             button_pressed = wait_buttons()
-            if(not(validate_move_input(pre_board_for_validation, from_position, to_position))):
-                #SPEAKER SAYING THE MOVE IS NOT VALID AND move_logic.py will speak
-                button_pressed2 = wait_buttons()
-                continue
+            if(not(validate_move_input(pre_board_for_validation, from_position, to_position, captured)[0])):
+                button_pressed = "black_button_pressed"
+                time.sleep(5)
             time.sleep(.5)
             if(button_pressed == "black_button_pressed"):
                 print("\nReset and try again!\n")
@@ -308,6 +310,7 @@ def handle_bot_turn():
     oled.display("Arm Moved:", f"{ai_move[0]} to {ai_move[1]}", board_state[ai_move[0]])
     swap_pieces_in_file("pre_turn_board.json","chessboard.json", ai_move[0], ai_move[1])
     play_sound("black_done", block=True)
+    go_rest()
   
 def get_ai_move():
     # Load the chess board
@@ -332,6 +335,7 @@ def arm_move(pos_from, pos_to):
     open_gripper()
     pick_place_from_to("pickup",pos_from)
     pick_place_from_to("placedown", pos_to)
+    
 
 def chessboard_to_fen(board_state,ai_color = "black"):
     rows = []
@@ -420,6 +424,7 @@ def piece(piece):
     play_sound(f"{piece[:6]}", block=True)
     play_sound(f"{piece[6:]}", block = True)
 if __name__ == "__main__":
+    go_rest()
     oled.display("Initial Checks", "Starting")
     play_sound("initial_checks", block=True)
     if is_checkmate_or_stalemate(json.load(open("chessboard.json")), "w"):

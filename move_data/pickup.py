@@ -14,7 +14,7 @@ pca.frequency = 50
 # Initialize servo on channel 0 : THis is the gripper one (new one we added)
 gripper_servo = servo.Servo(pca.channels[0], min_pulse=500, max_pulse=2500)
 
-CLOSE_POS= 179
+CLOSE_POS= 179.2
 HALF_OPEN = 172
 OPEN_POS = 168.2
 
@@ -80,12 +80,12 @@ def execute_positions(position_file):
         print(f"Error: Invalid JSON format in {position_file}.")
 
 def pick_place_from_to(action, square):
-	file_to_pull = f"{action}_{square}.json"
+	file_to_pull = f"/home/nischalkharel/CPR_Final/move_data/{action}_{square}.json"
 	execute_positions(file_to_pull)
 	        
 # Run the movement sequence
 if __name__ == "__main__":
     gripper_servo.angle =  OPEN_POS
-    pick_place_from_to("pickup","d1")
-    pick_place_from_to("placedown","d4")
+    pick_place_from_to("pickup","a8")
+    pick_place_from_to("placedown","g7")
     ser.close()
