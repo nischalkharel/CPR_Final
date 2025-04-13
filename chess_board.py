@@ -11,6 +11,8 @@ from arm import pick_place_from_to, open_gripper, go_rest
 from speaker import play_sound
 from display import ChessOLED 
 from move_logic import validate_move_input
+import sys
+
 i2c = busio.I2C(board.SCL, board.SDA)
 setup_checker = ChessSetupChecker(i2c)
 WHITE_BUTTON_PIN = 17
@@ -27,68 +29,84 @@ lgpio.gpio_claim_input(h, BLACK_BUTTON_PIN, lgpio.SET_PULL_UP)
 
 oled = ChessOLED()
 
+
 def wait_buttons(position_to_check = "", turn = 0, hold = False):
     prev_state = ""
+    hold_timer_start = None
+
     while True:
         white_state = lgpio.gpio_read(h, WHITE_BUTTON_PIN)
         black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
-        if(position_to_check != ""):
-            if prev_state != setup_checker.check(position_to_check):
-                oled.display(f"{position_to_check} is", f"{setup_checker.check(position_to_check)}")
-        
+
+        # -- Position check for OLED --
+        if position_to_check != "":
+            current_state = setup_checker.check(position_to_check)
+            if prev_state != current_state:
+                oled.display(f"{position_to_check} is", f"{current_state}")
+                prev_state = current_state
+
+        # -- Display board state if it's the player's turn --
         if turn:
             changed_squares = setup_checker.currentVSprevious_board_states()
-            line1 = ""
-            line2 = ""
-            counter = 0
-            for position, piece in changed_squares.items():
-                if(counter >= 2):
-                    continue
-                if(changed_squares.get(position) == "empty"):
+            line1, line2 = "", ""
+            for i, (position, piece) in enumerate(changed_squares.items()):
+                if i >= 2:
+                    break
+                if piece == "empty":
                     line1 = f"{position}: empty"
                 else:
                     line2 = f"{position}: piece"
-                
-                counter = counter+1
-                oled.display(line1, line2)    
-            
-            if(line1 == "") and line2 == "":
-                oled.display("Your Turn","Make a move")
-        if white_state == 0:  # Pressed (Active Low)
-            if(hold == True):
-                if black_state == 0:  # Pressed (Active Low)
-                    while(black_state == 0):
-                        black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
-                        time.sleep(.03)
-                    while(black_state == 0):
-                        black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
-                        time.sleep(.03)
-                    return "both pressed"
-                else:
-                    continue
-            while(white_state == 0):
+            oled.display(line1 or "Your Turn", line2 or "Make a move")
+
+        # -- Check if both buttons are pressed --
+        if white_state == 0 and black_state == 0:
+            print("HOLDING")
+            if hold:
+                while white_state == 0 or black_state == 0:
+                    white_state = lgpio.gpio_read(h, WHITE_BUTTON_PIN)
+                    black_state = lgpio.gpio_read(h, WHITE_BUTTON_PIN)
+                    time.sleep(.03)
+                return "both pressed"
+            if hold_timer_start is None:
+                hold_timer_start = time.time()
+            elif time.time() - hold_timer_start >= 10:
+                return possible_restart()
+            oled("Holding for",f"{time.time()-hold_timer_start} s")
+            print("HOLDING")
+            time.sleep(.1)
+        else:
+            hold_timer_start = None  # Reset if released
+
+        # -- Single button press handling --
+        if white_state == 0 and hold == False:
+            while white_state == 0:
                 white_state = lgpio.gpio_read(h, WHITE_BUTTON_PIN)
                 time.sleep(.03)
             return "white_button_pressed"
-        if black_state == 0:  # Pressed (Active Low)
-            if(hold == True):
-                if white_state == 0:  # Pressed (Active Low)
-                    while(white_state == 0):
-                        black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
-                        time.sleep(.03)
-                    while(black_state == 0):
-                        black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
-                        time.sleep(.03)
-                    return "both pressed"
-                else:
-                    continue
-            while(black_state == 0):
+
+        if black_state == 0 and hold == False:
+            while black_state == 0:
                 black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
                 time.sleep(.03)
             return "black_button_pressed"
-        
-        time.sleep(0.05)  # Debounce delay
 
+def possible_restart():
+    oled.display("Want to", "Restart?")
+    while True:
+        white_state = lgpio.gpio_read(h, WHITE_BUTTON_PIN)
+        black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
+
+        if white_state == 0:
+            oled.display("Restarting", "Please wait...")
+            time.sleep(1)
+            os.execv(sys.executable, ['python3'] + sys.argv)  # Restart program
+
+        if black_state == 0:
+            oled.display("Canceled", "Resuming game")
+            time.sleep(1)
+            return "continue"
+
+        time.sleep(0.05)
 
 def check_initial_setup():
     # Expected initial setup for a chessboard
@@ -439,7 +457,7 @@ def engine_to_physical(pos):
     return f"{pos[0]}{9-int(pos[1])}"
 
 def manage_game_details(turn = "black", difficulty = "easy", read=0):
-    filename = "previous_game_details"
+    filename = "previous_game_details.json"
     
     if read == 1:
         if os.path.exists(filename):
@@ -448,6 +466,7 @@ def manage_game_details(turn = "black", difficulty = "easy", read=0):
                     details = json.load(file)
                     return [details.get("Turn", ""), details.get("Difficulty", "")]
                 except json.JSONDecodeError:
+                    oled.display("No Saved", "Game")
                     return ["none", "none"]
         else:
             return []
@@ -461,10 +480,13 @@ def piece(piece):
     play_sound(f"{piece[6:]}", block = True)
 
 if __name__ == "__main__":
+    oled.display("Arm", "Starting")
     go_rest()
-    play_sound("hold_both_buttons_to_start", bool = True)
+    oled.display("Hold Buttons", "To Start")
+    play_sound("hold_both_buttons_to_start", block = True)
     hold = wait_buttons(hold = True)
 
+    oled.display("Select", "Game Mode")
     difficulty = ""
     resume_game = 0
     play_sound("choose_difficulty", block=True)
@@ -474,21 +496,25 @@ if __name__ == "__main__":
         if(pressed == "black_button_pressed"):
             match difficulty:
                 case "easy":
+                    oled.display("Medium", "Mode")
                     difficulty = "medium"
                     play_sound("medium_mode", block = True)
                 case "medium":
+                    oled.display("Hard", "Mode")
                     difficulty = "hard"
                     play_sound("hard_mode", block = True)
                 case "hard":
+                    oled.display("Resume", "Match")
                     difficulty = "resume_previous_match"
                     play_sound("resume_previous_match", block = True)
                 case _:
+                    oled.display("Easy", "Mode")
                     difficulty = "easy"
                     play_sound("easy_mode", block = True)
-        else:
+        elif(pressed == "white_button_pressed" and difficulty != ""):
             if(difficulty == "resume_previous_match"):
                 play_sound("lets_start_from_where_we_left_off", block=True)
-                play_sound("place_pieces.mp3", block = True)
+                play_sound("place_pieces", block = True)
                 game_details = manage_game_details(read = 1)
                 if(game_details[0] == "none"):
                     oled.display("no previous","game saved")
@@ -511,7 +537,7 @@ if __name__ == "__main__":
                             pressed = wait_buttons()
                             if(setup_checker.check(position) != "empty"):
                                 press_again = wait_buttons(position_to_check=position)
-                        elif expected_piece != "empty" and setup_checker == "empty":
+                        elif expected_piece != "empty" and setup_checker.check(position) == "empty":
                             everything_good = 0
                             oled.display(f"{expected_piece}", f"{position}")
                             pressed = wait_buttons()

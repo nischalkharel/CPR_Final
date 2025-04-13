@@ -1,0 +1,4 @@
+start: sudo systemctl start cpr.service
+stop: sudo systemctl stop cpr.service
+check status: sudo systemctl status cpr.service
+see live log: journalctl -u cpr.service -f
