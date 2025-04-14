@@ -12,7 +12,7 @@ from speaker import play_sound
 from display import ChessOLED 
 from move_logic import validate_move_input
 import sys
-
+from king_in_check_test import test_fen
 i2c = busio.I2C(board.SCL, board.SDA)
 setup_checker = ChessSetupChecker(i2c)
 WHITE_BUTTON_PIN = 17
@@ -33,7 +33,7 @@ oled = ChessOLED()
 def wait_buttons(position_to_check = "", turn = 0, hold = False):
     prev_state = ""
     hold_timer_start = None
-
+    counter_single = 0
     while True:
         white_state = lgpio.gpio_read(h, WHITE_BUTTON_PIN)
         black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
@@ -68,27 +68,42 @@ def wait_buttons(position_to_check = "", turn = 0, hold = False):
                     time.sleep(.03)
                 return "both pressed"
             if hold_timer_start is None:
+                print("LONG HOLDING")
                 hold_timer_start = time.time()
-            elif time.time() - hold_timer_start >= 10:
+            elif time.time() - hold_timer_start >= 5:
+                print("Restart")
                 return possible_restart()
-            oled("Holding for",f"{time.time()-hold_timer_start} s")
-            print("HOLDING")
+            oled.display("Holding for",f"{time.time()-hold_timer_start} s")
             time.sleep(.1)
         else:
             hold_timer_start = None  # Reset if released
-
+        
         # -- Single button press handling --
         if white_state == 0 and hold == False:
+            double_press = False
             while white_state == 0:
                 white_state = lgpio.gpio_read(h, WHITE_BUTTON_PIN)
-                time.sleep(.03)
-            return "white_button_pressed"
-
-        if black_state == 0 and hold == False:
-            while black_state == 0:
                 black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
                 time.sleep(.03)
-            return "black_button_pressed"
+                if(black_state == 0):
+                    double_press = True
+                    white_state = 1 
+                    break
+            if not(double_press): 
+                return "white_button_pressed"
+
+        if black_state == 0 and hold == False:
+            double_press = False
+            while black_state == 0:
+                white_state = lgpio.gpio_read(h, WHITE_BUTTON_PIN)
+                black_state = lgpio.gpio_read(h, BLACK_BUTTON_PIN)
+                time.sleep(.03)
+                if(white_state == 0):
+                    double_press = True
+                    black_state = 1 
+                    break
+            if not(double_press):
+                return "black_button_pressed"
 
 def possible_restart():
     oled.display("Want to", "Restart?")
@@ -166,9 +181,11 @@ def handle_human_turn():
 
     manage_game_details("white",difficulty, read = 0)
     pre_board_for_validation = board_state
-
+    
+    king_check = test_fen(chessboard_to_fen(board_state=board_state, ai_color="white"), check_current=1)
+    
     oled.display("Your Turn","Make a move")
-    play_sound("WhiteTurn", block=True)
+    play_sound("now_your_turn", block=True)
     captured = 0
     # Continuously check for changes in progress board
     while True:
@@ -191,7 +208,7 @@ def handle_human_turn():
                 square = position
                 
 
-            play_sound("pressWhite_Black", block=True)
+            play_sound("Press_white_to_accept_or_black", block=True)
             button_pressed = wait_buttons(square)
             if(button_pressed == "black_button_pressed"):
                 print("\nReset and try again!\n")
@@ -213,8 +230,9 @@ def handle_human_turn():
                     from_position = position
                 else:
                     to_position = position
+            
             oled.display(f"Moved {board_state[from_position]}:",f"{from_position} to {to_position}", f"{board_state[from_position]}")    
-            play_sound("recorded_move_from", block=True)
+            play_sound("was_this_your_move", block=True)
             play_sound(from_position, block=True)
             play_sound("to", block = True)
             play_sound(to_position, block= True)
@@ -222,24 +240,32 @@ def handle_human_turn():
             for position, piece in changed_squares.items():
                 print(position)
             
-            play_sound("pressWhite_Black", block=False)
+            play_sound("Press_white_to_accept_or_black", block=False)
             button_pressed = wait_buttons()
             if(not(validate_move_input(pre_board_for_validation, from_position, to_position, captured)[0])):
                 button_pressed = "black_button_pressed"
                 time.sleep(5)
+            elif(king_check[0]):
+                king_check_again = test_fen(chessboard_to_fen(board_state=board_state, ai_color="white"), from_sq=from_position, to_sq=to_position)
+                if(king_check_again[0]):
+                    button_pressed = "black_button_pressed"
+                    time.sleep(3)
+
             time.sleep(.5)
             if(button_pressed == "black_button_pressed"):
                 print("\nReset and try again!\n")
                 continue
+
+            
         elif len(changed_squares) == 0:
             oled.display("No Changes", "Dectected!")
-            play_sound("pressWhite_Black", block=True)
+            play_sound("Press_white_to_accept_or_black", block=True)
             continue
             
         else:
             oled.display("Multiple Changes", "Dectected!")
             play_sound("multiple_changed", block=True)
-            play_sound("pressWhite_Black", block=True)
+            play_sound("Press_white_to_accept_or_black", block=True)
             for position, piece in changed_squares.items():
                 play_sound(f"{position}", block=True)
                 button_pressed = wait_buttons(position)
@@ -252,7 +278,8 @@ def handle_human_turn():
                 to_position = position
       
 
-
+        oled.display("Move","Confirmed")
+        play_sound("confirmed_after_white_button_pressed", block=True)
         swap_pieces_in_file("pre_turn_board.json","chessboard.json", from_position, to_position)
         
         ### VALIDATION CHECK HERE ###
@@ -263,12 +290,17 @@ def handle_bot_turn(difficulty = "easy"):
     shutil.copy("chessboard.json", "pre_turn_board.json")
     with open("pre_turn_board.json", "r") as file:
         board_state = json.load(file)
-    
     oled.display("Arm's", "Turn")
-    play_sound("BlackTurn", block=True)
+    play_sound("now_my_turn", block=True)
     manage_game_details("black",difficulty, read = 0)
 
     ai_move = get_ai_move(difficulty)
+    if ai_move is None:
+        play_sound("checkmate", block=True)
+        oled.display("Checkmate", "You Win!")
+        time.sleep(40)
+        return
+
     ai_move[0] = engine_to_physical(ai_move[0])
     ai_move[1] = engine_to_physical(ai_move[1])
     print(f"{ai_move[0]}")
@@ -396,6 +428,7 @@ def chessboard_to_fen(board_state,ai_color = "black"):
 
     turn = "w" if ai_color == "white" else "b"
     fen = "/".join(rows) + f" {turn} - - 0 1"
+    #return "r2k3r/ppp1n1pp/1pn5/3p1qbN/1pBKp1b1/N7/PPP2PPP/R6R w - - 0 1"
     return fen
 
 
@@ -480,6 +513,7 @@ def piece(piece):
     play_sound(f"{piece[6:]}", block = True)
 
 if __name__ == "__main__":
+    time.sleep(5)
     oled.display("Arm", "Starting")
     go_rest()
     oled.display("Hold Buttons", "To Start")

@@ -15,7 +15,7 @@ pca.frequency = 50
 # Initialize servo on channel 0 : THis is the gripper one (new one we added)
 gripper_servo = servo.Servo(pca.channels[0], min_pulse=500, max_pulse=2500)
 
-CLOSE_POS= 179
+CLOSE_POS= 179.3
 HALF_OPEN = 172
 OPEN_POS = 168.2
 

@@ -86,6 +86,6 @@ def pick_place_from_to(action, square):
 # Run the movement sequence
 if __name__ == "__main__":
     gripper_servo.angle =  OPEN_POS
-    pick_place_from_to("pickup","a8")
-    pick_place_from_to("placedown","g7")
+    pick_place_from_to("pickup","g1")
+    pick_place_from_to("placedown","e2")
     ser.close()

@@ -22,28 +22,28 @@ class AIChess:
     def close_engine(self):
         self.engine.quit()
         
-    def get_ai_move(self, difficulty = "easy") -> list[str]:
+    def get_ai_move(self, difficulty="easy") -> list[str] | None:
         oled = ChessOLED()
-        """Return [from_sq, to_sq] and transparently restart Stockfish if it crashed."""
-        # --- choose a time limit from the difficulty string ------------------------
         time_limit = {"easy": 0.5, "medium": 1.0, "hard": 3.0}.get(difficulty, 1.0)
-        limit      = chess.engine.Limit(time=time_limit)
+        limit = chess.engine.Limit(time=time_limit)
 
-        for attempt in (1, 6):
+        for attempt in range(1, 7):
             try:
                 result = self.engine.play(self.board, limit)
-                uci    = result.move.uci()           
-                return [uci[:2], uci[2:4]]          
+                if result.move is None or self.board.is_game_over():
+                    oled.display("No Legal Move", "Game Over")
+                    return None
+                uci = result.move.uci()
+                return [uci[:2], uci[2:4]]
             except (chess.engine.EngineTerminatedError, BrokenPipeError):
-                oled.display("Stockfish Failed", f"Attempt {1}")
-                time.sleep(10)
+                oled.display("Stockfish Failed", f"Attempt {attempt}")
+                time.sleep(1)
                 if attempt == 6:
-                    oled.display("Unfortunately", "All Failed")
-                    time.sleep(10)                    
+                    oled.display("Stockfish Crashed", "Game Ending")
                     raise RuntimeError("Stockfish crashed 6 in a row")
-                # -------- restart the engine and retry  ------------------------
                 try:
                     self.engine.quit()
                 except Exception:
-                    pass                             
+                    pass
                 self.engine = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")
+

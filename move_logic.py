@@ -17,14 +17,13 @@ def validate_move_input(pre_turn_board, from_move, to_move, captured = 0):
         "captured": pre_turn_board.get(to_move, "empty") if pre_turn_board.get(to_move, "empty") != "empty" else None
     }
     
-    return validate_move(pre_turn_board, move,captured)
+    return validate_move(pre_turn_board, move, captured)
 
 def validate_move(old_chessboard, move, captured):
     
     piece = move["piece"][6:]
     from_square = move["from"]
     to_square = move["to"]
-    captured = move.get("captured")
 
     if from_square == to_square: # THIS SHOULD NOT REALLY HAPPEN BUT JUST IN CASE
         return False, "Piece did not move."
@@ -65,12 +64,12 @@ def validate_pawn_move(old_chessboard, move, captured):
                 return True, "Valid double pawn move."
 
     # Capturing move
-    if abs(ord(to_file) - ord(from_file)) == 1 and from_rank - to_rank == direction and captured:
+    if abs(ord(from_file) - ord(to_file)) == 1 and from_rank - to_rank == direction and captured:
         return True, "Valid pawn capture."
 
             
     oled.display("Invalid","Pawn Move")
-    play_sound("invalid_pawn_move.mp3", block =True)
+    play_sound("invalid_pawn_move", block =True)
     return False, "Invalid pawn move."
 
 def validate_rook_move(old_chessboard, move, captured):
@@ -81,7 +80,7 @@ def validate_rook_move(old_chessboard, move, captured):
     
     
     oled.display("Invalid","Rook Move")
-    play_sound("invalid_rook_move.mp3", block = True)  
+    play_sound("invalid_rook_move", block = True)  
     return False, "Invalid rook move."
 
 def validate_knight_move(old_chessboard, move, captured):
@@ -91,7 +90,7 @@ def validate_knight_move(old_chessboard, move, captured):
     if (dx, dy) in [(1, 2), (2, 1)]:
         return True, "Valid knight move."
     oled.display("Invalid","Knight Move")
-    play_sound("invalid_knight_move.mp3", block = True)  
+    play_sound("invalid_knight_move", block = True)  
     return False, "Invalid knight move."
 
 def validate_bishop_move(old_chessboard, move, captured):
@@ -101,7 +100,7 @@ def validate_bishop_move(old_chessboard, move, captured):
         return validate_diagonal_path(old_chessboard, move, captured)
     
     oled.display("Invalid","Bisop Move")
-    play_sound("invalid_bishop_move.mp3", block = True)  
+    play_sound("invalid_bishop_move", block = True)  
     return False, "Invalid bishop move."
 
 def validate_queen_move(old_chessboard, move, captured):
@@ -113,7 +112,7 @@ def validate_queen_move(old_chessboard, move, captured):
 
     
     oled.display("Invalid","Queen Move")
-    play_sound("invalid_queen_move.mp3", block = True)  
+    play_sound("invalid_queen_move", block = True)  
     return False, "Invalid queen move."
 
 def validate_king_move(old_chessboard, move, captured):
@@ -123,7 +122,7 @@ def validate_king_move(old_chessboard, move, captured):
         return True, "Valid king move."
     
     oled.display("Invalid","King Move")
-    play_sound("invalid_king_move.mp3", block = True)  
+    play_sound("invalid_king_move", block = True)  
     return False, "Invalid king move."
 
 
@@ -139,14 +138,14 @@ def validate_straight_path(old_chessboard, move, captured,axis):
         for row in range(min(int(from_square[1]), int(to_square[1])) + 1, max(int(from_square[1]), int(to_square[1]))):
             if old_chessboard[f"{col}{row}"] != "empty":
                 oled.display("Invalid Move","Path Blocked")
-                play_sound("invalid_path_blocked.mp3", block = True)  
+                play_sound("invalid_path_blocked", block = True)  
                 return False, "Path is blocked."
     else:  # Horizontal
         row = from_square[1]
         for col in range(min(ord(from_square[0]), ord(to_square[0])) + 1, max(ord(from_square[0]), ord(to_square[0]))):
             if old_chessboard[f"{chr(col)}{row}"] != "empty":
                 oled.display("Invalid Move","Path Blocked")
-                play_sound("invalid_path_blocked.mp3", block = True)  
+                play_sound("invalid_path_blocked", block = True)  
                 return False, "Path is blocked."
 
     return True, "Path is clear."
@@ -164,12 +163,13 @@ def validate_diagonal_path(old_chessboard, move, captured=0):
     while current_file != to_file and current_rank != to_rank:
         if old_chessboard[f"{chr(current_file)}{current_rank}"] != "empty":
             oled.display("Invalid Move","Path Blocked")
-            play_sound("invalid_path_blocked.mp3", block = True)  
+            play_sound("invalid_path_blocked", block = True)  
             return False, "Path is blocked."
         current_file += file_step
         current_rank += rank_step
     
     return True, "Path is clear."
+
 
 
 # special moves like castling not implemented due to our board constraint
